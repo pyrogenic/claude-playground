@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Drone</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0a0a0f;
+    color: #8888aa;
+    font-family: 'Courier New', monospace;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    user-select: none;
+  }
+  canvas {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    z-index: 0;
+    opacity: 0.4;
+  }
+  .controls {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 28px;
+  }
+  h1 {
+    font-size: 14px;
+    letter-spacing: 8px;
+    text-transform: uppercase;
+    color: #555570;
+    font-weight: 300;
+  }
+  #startBtn {
+    width: 100px;
+    height: 100px;
+    border-radius: 50%;
+    border: 1px solid #333350;
+    background: radial-gradient(circle at 40% 40%, #1a1a2e, #0a0a15);
+    color: #6666880;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 11px;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    color: #555570;
+    transition: all 1.5s ease;
+    outline: none;
+  }
+  #startBtn:hover {
+    border-color: #555580;
+    box-shadow: 0 0 30px rgba(80, 80, 140, 0.15);
+  }
+  #startBtn.active {
+    border-color: #666690;
+    box-shadow: 0 0 50px rgba(100, 100, 160, 0.2);
+    background: radial-gradient(circle at 40% 40%, #22223a, #0e0e1a);
+  }
+  .sliders {
+    display: flex;
+    gap: 32px;
+    opacity: 0;
+    transition: opacity 1.5s ease;
+  }
+  .sliders.visible { opacity: 1; }
+  .slider-group {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+  }
+  .slider-group label {
+    font-size: 9px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: #444460;
+  }
+  input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100px;
+    height: 2px;
+    background: #222240;
+    outline: none;
+    border-radius: 1px;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #555580;
+    cursor: pointer;
+  }
+  input[type="range"]::-moz-range-thumb {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #555580;
+    cursor: pointer;
+    border: none;
+  }
+</style>
+</head>
+<body>
+<canvas id="viz"></canvas>
+<div class="controls">
+  <h1>Drone</h1>
+  <button id="startBtn">begin</button>
+  <div class="sliders" id="sliders">
+    <div class="slider-group">
+      <label>density</label>
+      <input type="range" id="density" min="0" max="1" step="0.01" value="0.5">
+    </div>
+    <div class="slider-group">
+      <label>shimmer</label>
+      <input type="range" id="shimmer" min="0" max="1" step="0.01" value="0.4">
+    </div>
+    <div class="slider-group">
+      <label>breath</label>
+      <input type="range" id="breath" min="0" max="1" step="0.01" value="0.6">
+    </div>
+    <div class="slider-group">
+      <label>drift</label>
+      <input type="range" id="drift" min="0" max="1" step="0.01" value="0.3">
+    </div>
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+
+let ctx, running = false;
+const voices = [];
+const noiseNodes = [];
+
+// Frequencies: mid-high range, no bass. Intervals chosen for beating/clusters.
+const FREQ_POOL = [
+  220, 233.08, 246.94, 261.63, 277.18, 293.66, 311.13, 329.63,
+  349.23, 369.99, 392.00, 415.30, 440, 466.16, 493.88, 523.25,
+  554.37, 587.33, 622.25, 659.25, 698.46, 739.99, 783.99, 830.61
+];
+
+function makeNoise(audioCtx) {
+  const len = audioCtx.sampleRate * 4;
+  const buf = audioCtx.createBuffer(2, len, audioCtx.sampleRate);
+  for (let ch = 0; ch < 2; ch++) {
+    const data = buf.getChannelData(ch);
+    for (let i = 0; i < len; i++) {
+      data[i] = (Math.random() * 2 - 1);
+    }
+  }
+  return buf;
+}
+
+function createVoice(audioCtx, dest, freq) {
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  const pan = audioCtx.createStereoPanner();
+  const filter = audioCtx.createBiquadFilter();
+
+  osc.type = ['sine', 'triangle'][Math.random() > 0.6 ? 1 : 0];
+  osc.frequency.value = freq;
+  gain.gain.value = 0;
+  pan.pan.value = Math.random() * 2 - 1;
+  filter.type = 'bandpass';
+  filter.frequency.value = freq;
+  filter.Q.value = 0.5 + Math.random() * 2;
+
+  osc.connect(filter);
+  filter.connect(gain);
+  gain.connect(pan);
+  pan.connect(dest);
+  osc.start();
+
+  // Slow fade in
+  const targetGain = 0.02 + Math.random() * 0.04;
+  const fadeTime = 4 + Math.random() * 8;
+  gain.gain.setTargetAtTime(targetGain, audioCtx.currentTime, fadeTime);
+
+  return { osc, gain, pan, filter, freq, targetGain, alive: true, born: audioCtx.currentTime };
+}
+
+function createBreathLayer(audioCtx, dest, noiseBuf) {
+  const src = audioCtx.createBufferSource();
+  src.buffer = noiseBuf;
+  src.loop = true;
+
+  const hp = audioCtx.createBiquadFilter();
+  hp.type = 'highpass';
+  hp.frequency.value = 800;
+
+  const bp = audioCtx.createBiquadFilter();
+  bp.type = 'bandpass';
+  bp.frequency.value = 2000 + Math.random() * 3000;
+  bp.Q.value = 0.3 + Math.random() * 0.8;
+
+  const gain = audioCtx.createGain();
+  gain.gain.value = 0;
+
+  const pan = audioCtx.createStereoPanner();
+  pan.pan.value = Math.random() * 2 - 1;
+
+  src.connect(hp);
+  hp.connect(bp);
+  bp.connect(gain);
+  gain.connect(pan);
+  pan.connect(dest);
+  src.start();
+
+  const targetGain = 0.01 + Math.random() * 0.025;
+  gain.gain.setTargetAtTime(targetGain, audioCtx.currentTime, 3 + Math.random() * 5);
+
+  return { src, hp, bp, gain, pan, targetGain, alive: true };
+}
+
+function init() {
+  ctx = new (window.AudioContext || window.webkitAudioContext)();
+  const noiseBuf = makeNoise(ctx);
+
+  // Master chain: highpass -> reverb-like delays -> compressor -> output
+  const masterGain = ctx.createGain();
+  masterGain.gain.value = 0.7;
+
+  const masterHP = ctx.createBiquadFilter();
+  masterHP.type = 'highpass';
+  masterHP.frequency.value = 180;
+
+  // Reverb via parallel delays
+  const reverbMix = ctx.createGain();
+  reverbMix.gain.value = 0.3;
+  const dryMix = ctx.createGain();
+  dryMix.gain.value = 0.7;
+
+  const delays = [0.037, 0.053, 0.079, 0.113, 0.157, 0.211].map(t => {
+    const d = ctx.createDelay(1);
+    d.delayTime.value = t;
+    const fb = ctx.createGain();
+    fb.gain.value = 0.4 + Math.random() * 0.2;
+    const filt = ctx.createBiquadFilter();
+    filt.type = 'lowpass';
+    filt.frequency.value = 2000 + Math.random() * 2000;
+    masterGain.connect(d);
+    d.connect(filt);
+    filt.connect(fb);
+    fb.connect(d);
+    filt.connect(reverbMix);
+    return { d, fb, filt };
+  });
+
+  masterGain.connect(dryMix);
+
+  const comp = ctx.createDynamicsCompressor();
+  comp.threshold.value = -24;
+  comp.ratio.value = 4;
+  comp.attack.value = 0.1;
+  comp.release.value = 0.5;
+
+  dryMix.connect(comp);
+  reverbMix.connect(comp);
+  comp.connect(masterHP);
+  masterHP.connect(ctx.destination);
+
+  // Start initial voices
+  const initialFreqs = pickCluster(4);
+  for (const f of initialFreqs) {
+    voices.push(createVoice(ctx, masterGain, f));
+  }
+
+  // Start breath layers
+  for (let i = 0; i < 3; i++) {
+    noiseNodes.push(createBreathLayer(ctx, masterGain, noiseBuf));
+  }
+
+  // Evolution loop
+  function evolve() {
+    if (!running) return;
+
+    const now = ctx.currentTime;
+    const densityVal = parseFloat($('density').value);
+    const shimmerVal = parseFloat($('shimmer').value);
+    const breathVal = parseFloat($('breath').value);
+    const driftVal = parseFloat($('drift').value);
+
+    // Drift existing voices
+    voices.forEach(v => {
+      if (!v.alive) return;
+      const driftAmount = driftVal * 3;
+      const newFreq = v.freq + (Math.random() - 0.5) * driftAmount;
+      v.osc.frequency.setTargetAtTime(newFreq, now, 8 + Math.random() * 12);
+
+      // Slow pan drift
+      const newPan = Math.max(-1, Math.min(1, v.pan.pan.value + (Math.random() - 0.5) * 0.3));
+      v.pan.pan.setTargetAtTime(newPan, now, 5);
+
+      // Shimmer: modulate filter
+      const shimFreq = v.freq * (1 + shimmerVal * (Math.random() - 0.3) * 2);
+      v.filter.frequency.setTargetAtTime(shimFreq, now, 3 + Math.random() * 4);
+    });
+
+    // Breath modulation
+    noiseNodes.forEach(n => {
+      if (!n.alive) return;
+      n.gain.gain.setTargetAtTime(n.targetGain * breathVal, now, 4);
+      n.bp.frequency.setTargetAtTime(1500 + Math.random() * 4000, now, 6 + Math.random() * 6);
+      const newPan = Math.max(-1, Math.min(1, n.pan.pan.value + (Math.random() - 0.5) * 0.4));
+      n.pan.pan.setTargetAtTime(newPan, now, 4);
+    });
+
+    // Occasionally fade out a voice and introduce a new one
+    const desiredCount = 3 + Math.floor(densityVal * 5);
+    const aliveVoices = voices.filter(v => v.alive);
+
+    if (aliveVoices.length > desiredCount && Math.random() < 0.3) {
+      const victim = aliveVoices[Math.floor(Math.random() * aliveVoices.length)];
+      victim.gain.gain.setTargetAtTime(0, now, 6 + Math.random() * 8);
+      victim.alive = false;
+      setTimeout(() => { try { victim.osc.stop(); } catch(e) {} }, 20000);
+    }
+
+    if (aliveVoices.length < desiredCount && Math.random() < 0.4) {
+      const freqs = pickCluster(1);
+      voices.push(createVoice(ctx, masterGain, freqs[0]));
+    }
+
+    // Rarely: a high shimmer note (ethereal melodic hint)
+    if (Math.random() < 0.04 * shimmerVal) {
+      const highFreq = FREQ_POOL[FREQ_POOL.length - Math.floor(Math.random() * 6) - 1] * 2;
+      const ghost = createVoice(ctx, masterGain, highFreq);
+      ghost.gain.gain.cancelScheduledValues(now);
+      ghost.gain.gain.setValueAtTime(0, now);
+      ghost.gain.gain.setTargetAtTime(0.008, now, 3);
+      ghost.gain.gain.setTargetAtTime(0, now + 6 + Math.random() * 8, 4);
+      ghost.alive = false;
+      setTimeout(() => { try { ghost.osc.stop(); } catch(e) {} }, 25000);
+    }
+
+    setTimeout(evolve, 3000 + Math.random() * 4000);
+  }
+
+  evolve();
+  startVisualization();
+}
+
+function pickCluster(count) {
+  const root = Math.floor(Math.random() * (FREQ_POOL.length - 6));
+  const cluster = [];
+  for (let i = 0; i < count; i++) {
+    const idx = root + Math.floor(Math.random() * 6);
+    cluster.push(FREQ_POOL[Math.min(idx, FREQ_POOL.length - 1)] * (Math.random() > 0.3 ? 1 : 2));
+  }
+  return cluster;
+}
+
+// Visualization
+function startVisualization() {
+  const canvas = $('viz');
+  const c = canvas.getContext('2d');
+  let w, h;
+
+  function resize() {
+    w = canvas.width = window.innerWidth;
+    h = canvas.height = window.innerHeight;
+  }
+  resize();
+  window.addEventListener('resize', resize);
+
+  const particles = [];
+  for (let i = 0; i < 80; i++) {
+    particles.push({
+      x: Math.random() * w,
+      y: Math.random() * h,
+      vx: (Math.random() - 0.5) * 0.3,
+      vy: (Math.random() - 0.5) * 0.2,
+      r: Math.random() * 2 + 0.5,
+      alpha: Math.random() * 0.3
+    });
+  }
+
+  function draw() {
+    if (!running) return;
+    c.fillStyle = 'rgba(10, 10, 15, 0.08)';
+    c.fillRect(0, 0, w, h);
+
+    const breathVal = parseFloat($('breath').value);
+    const shimmerVal = parseFloat($('shimmer').value);
+
+    particles.forEach(p => {
+      p.x += p.vx + (Math.random() - 0.5) * 0.2 * breathVal;
+      p.y += p.vy + (Math.random() - 0.5) * 0.15;
+      p.alpha += (Math.random() - 0.5) * 0.02;
+      p.alpha = Math.max(0.02, Math.min(0.25 + shimmerVal * 0.15, p.alpha));
+
+      if (p.x < 0) p.x = w;
+      if (p.x > w) p.x = 0;
+      if (p.y < 0) p.y = h;
+      if (p.y > h) p.y = 0;
+
+      c.beginPath();
+      c.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+      c.fillStyle = `rgba(120, 120, 180, ${p.alpha})`;
+      c.fill();
+    });
+
+    requestAnimationFrame(draw);
+  }
+  draw();
+}
+
+// Button
+$('startBtn').addEventListener('click', () => {
+  if (!running) {
+    running = true;
+    $('startBtn').textContent = 'end';
+    $('startBtn').classList.add('active');
+    $('sliders').classList.add('visible');
+    init();
+  } else {
+    running = false;
+    $('startBtn').textContent = 'begin';
+    $('startBtn').classList.remove('active');
+    $('sliders').classList.remove('visible');
+    if (ctx) {
+      ctx.close();
+      ctx = null;
+    }
+    voices.length = 0;
+    noiseNodes.length = 0;
+  }
+});
+</script>
+</body>
+</html>
