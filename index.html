@@ -502,20 +502,29 @@ function selectVariation(idx) {
   cards[idx].classList.add('selected');
   setTimeout(() => cards[idx].classList.remove('selected'), 600);
 
-  // Tear down old slots
+  // Tear down only the other slots
   for (let i = 0; i < 4; i++) {
+    if (i === idx) continue;
     if (slots[i]) slots[i].destroy();
     slots[i] = null;
   }
 
-  // Generate new variations around the chosen basis
-  generateVariations();
+  // Keep the chosen one in place, mutate the rest
+  const kept = variations[idx];
+  for (let i = 0; i < 4; i++) {
+    variations[i] = (i === idx) ? { ...kept } : mutate(basis, 0.4);
+  }
+  renderVariationCards();
 
   // Small delay so old audio fades before new starts
   setTimeout(() => {
     if (!running) return;
-    startAllSlots();
-    startCycling();
+    for (let i = 0; i < 4; i++) {
+      if (i === idx) continue;
+      slots[i] = createSlot(variations[i]);
+    }
+    highlightSlot(idx);
+    if (!paused) startCycling();
   }, 1500);
 }
 
