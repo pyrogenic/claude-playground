@@ -125,6 +125,24 @@
   .variation.listening .param-fill {
     background: #6666aa;
   }
+  #pauseBtn {
+    font-family: inherit;
+    font-size: 9px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: #555570;
+    background: none;
+    border: 1px solid #333350;
+    border-radius: 4px;
+    padding: 5px 14px;
+    cursor: pointer;
+    outline: none;
+    transition: all 0.8s ease;
+    opacity: 0;
+  }
+  #pauseBtn.visible { opacity: 1; }
+  #pauseBtn:hover { border-color: #555580; }
+  #pauseBtn.paused { color: #6666aa; border-color: #555588; }
   .hint {
     font-size: 9px;
     letter-spacing: 2px;
@@ -171,13 +189,14 @@
     <div class="cycle-dot" data-idx="2"></div>
     <div class="cycle-dot" data-idx="3"></div>
   </div>
+  <button id="pauseBtn">pause</button>
   <div class="hint" id="hint">tap a variation to explore</div>
 </div>
 
 <script>
 const $ = id => document.getElementById(id);
 
-let ctx, running = false;
+let ctx, running = false, paused = false;
 let masterGain, noiseBuf;
 const PARAM_NAMES = ['density', 'shimmer', 'breath', 'drift'];
 
@@ -569,6 +588,10 @@ $('startBtn').addEventListener('click', () => {
     $('variations').classList.add('visible');
     $('cycleIndicator').classList.add('visible');
     $('hint').classList.add('visible');
+    $('pauseBtn').classList.add('visible');
+    paused = false;
+    $('pauseBtn').textContent = 'pause';
+    $('pauseBtn').classList.remove('paused');
     init();
   } else {
     running = false;
@@ -577,11 +600,26 @@ $('startBtn').addEventListener('click', () => {
     $('variations').classList.remove('visible');
     $('cycleIndicator').classList.remove('visible');
     $('hint').classList.remove('visible');
+    $('pauseBtn').classList.remove('visible');
     clearInterval(cycleTimer);
     for (let i = 0; i < 4; i++) {
       if (slots[i]) { slots[i].destroy(); slots[i] = null; }
     }
     if (ctx) { ctx.close(); ctx = null; }
+  }
+});
+
+$('pauseBtn').addEventListener('click', () => {
+  if (!running) return;
+  paused = !paused;
+  if (paused) {
+    clearInterval(cycleTimer);
+    $('pauseBtn').textContent = 'cycle';
+    $('pauseBtn').classList.add('paused');
+  } else {
+    startCycling();
+    $('pauseBtn').textContent = 'pause';
+    $('pauseBtn').classList.remove('paused');
   }
 });
 </script>
