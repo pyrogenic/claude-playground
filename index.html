@@ -168,7 +168,7 @@ function createVoice(audioCtx, dest, freq) {
   const pan = audioCtx.createStereoPanner();
   const filter = audioCtx.createBiquadFilter();
 
-  osc.type = ['sine', 'triangle'][Math.random() > 0.6 ? 1 : 0];
+  osc.type = ['sine', 'triangle'][Math.random() > 0.8 ? 1 : 0];
   osc.frequency.value = freq;
   gain.gain.value = 0;
   pan.pan.value = Math.random() * 2 - 1;
@@ -201,7 +201,7 @@ function createBreathLayer(audioCtx, dest, noiseBuf) {
 
   const bp = audioCtx.createBiquadFilter();
   bp.type = 'bandpass';
-  bp.frequency.value = 2000 + Math.random() * 3000;
+  bp.frequency.value = 1200 + Math.random() * 1800;
   bp.Q.value = 0.3 + Math.random() * 0.8;
 
   const gain = audioCtx.createGain();
@@ -311,7 +311,7 @@ function init() {
     noiseNodes.forEach(n => {
       if (!n.alive) return;
       n.gain.gain.setTargetAtTime(n.targetGain * breathVal, now, 4);
-      n.bp.frequency.setTargetAtTime(1500 + Math.random() * 4000, now, 6 + Math.random() * 6);
+      n.bp.frequency.setTargetAtTime(1000 + Math.random() * 2000, now, 6 + Math.random() * 6);
       const newPan = Math.max(-1, Math.min(1, n.pan.pan.value + (Math.random() - 0.5) * 0.4));
       n.pan.pan.setTargetAtTime(newPan, now, 4);
     });
@@ -334,11 +334,11 @@ function init() {
 
     // Rarely: a high shimmer note (ethereal melodic hint)
     if (Math.random() < 0.04 * shimmerVal) {
-      const highFreq = FREQ_POOL[FREQ_POOL.length - Math.floor(Math.random() * 6) - 1] * 2;
+      const highFreq = FREQ_POOL[Math.floor(FREQ_POOL.length * 0.4) + Math.floor(Math.random() * 6)];
       const ghost = createVoice(ctx, masterGain, highFreq);
       ghost.gain.gain.cancelScheduledValues(now);
       ghost.gain.gain.setValueAtTime(0, now);
-      ghost.gain.gain.setTargetAtTime(0.008, now, 3);
+      ghost.gain.gain.setTargetAtTime(0.005, now, 3);
       ghost.gain.gain.setTargetAtTime(0, now + 6 + Math.random() * 8, 4);
       ghost.alive = false;
       setTimeout(() => { try { ghost.osc.stop(); } catch(e) {} }, 25000);
@@ -356,7 +356,7 @@ function pickCluster(count) {
   const cluster = [];
   for (let i = 0; i < count; i++) {
     const idx = root + Math.floor(Math.random() * 6);
-    cluster.push(FREQ_POOL[Math.min(idx, FREQ_POOL.length - 1)] * (Math.random() > 0.3 ? 1 : 2));
+    cluster.push(FREQ_POOL[Math.min(idx, FREQ_POOL.length - 1)] * (Math.random() > 0.15 ? 1 : 2));
   }
   return cluster;
 }
