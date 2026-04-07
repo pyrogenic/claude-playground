@@ -329,63 +329,100 @@ function renderCells() {
 // Each cell gets a deterministic-ish visual based on its 4 params.
 // We use a seeded approach: hash the params to get a seed, then draw.
 
+// Deterministic pseudo-random from a seed
+function seededRand(seed) {
+  let s = seed;
+  return function() {
+    s = (s * 16807 + 0) % 2147483647;
+    return (s - 1) / 2147483646;
+  };
+}
+
 function drawCellArt(canvas, params, isListening, time) {
   const c = canvas.getContext('2d');
   const w = canvas.width, h = canvas.height;
 
-  c.fillStyle = '#0a0a14';
-  c.fillRect(0, 0, w, h);
-
   const { density, shimmer, breath, drift } = params;
 
-  // Layer 1: soft gradient bands driven by density and drift
-  const bandCount = 3 + Math.floor(density * 6);
-  for (let i = 0; i < bandCount; i++) {
-    const t = i / bandCount;
-    const y = h * t + Math.sin(t * 6.28 + drift * 10 + time * 0.3) * h * 0.08 * breath;
-    const alpha = 0.04 + shimmer * 0.06;
-    const hue = 220 + drift * 60 + i * 8;
-    const sat = 20 + shimmer * 40;
-    c.fillStyle = `hsla(${hue}, ${sat}%, ${35 + shimmer * 20}%, ${alpha})`;
-    c.fillRect(0, y - 4, w, 8 + density * 4);
+  // Deterministic seed from params (quantized so similar params = similar art)
+  const q = 40; // quantization level
+  const seedVal = (Math.round(density * q) * 1000000
+    + Math.round(shimmer * q) * 10000
+    + Math.round(breath * q) * 100
+    + Math.round(drift * q));
+  const rand = seededRand(seedVal + 1);
+
+  // Background
+  c.fillStyle = '#0c0c16';
+  c.fillRect(0, 0, w, h);
+
+  // Color palette derived from params
+  const baseHue = drift * 280 + 180; // full hue range
+  const hue2 = baseHue + 30 + shimmer * 60;
+  const hue3 = baseHue - 20 - breath * 40;
+  const sat = 35 + shimmer * 35;
+  const baseLum = isListening ? 50 : 35;
+
+  // Identicon grid: 10 cols (5 mirrored) x 5 rows
+  const cols = 10, halfCols = 5, rows = 5;
+  const cellW = w / cols, cellH = h / rows;
+
+  // Generate left half, mirror to right
+  for (let gy = 0; gy < rows; gy++) {
+    for (let gx = 0; gx < halfCols; gx++) {
+      const r = rand();
+      // Density controls how many cells are filled
+      const threshold = 0.3 + (1 - density) * 0.35;
+      if (r > threshold) {
+        // Pick from palette
+        const colorChoice = rand();
+        let hue, lum, alpha;
+        if (colorChoice < 0.45) {
+          hue = baseHue;
+          lum = baseLum + rand() * 15;
+          alpha = isListening ? 0.7 : 0.45;
+        } else if (colorChoice < 0.75) {
+          hue = hue2;
+          lum = baseLum - 5 + rand() * 20;
+          alpha = isListening ? 0.55 : 0.35;
+        } else {
+          hue = hue3;
+          lum = baseLum + 5 + rand() * 10;
+          alpha = isListening ? 0.5 : 0.3;
+        }
+
+        const fill = `hsla(${hue}, ${sat}%, ${lum}%, ${alpha})`;
+        // Draw on left side
+        c.fillStyle = fill;
+        c.fillRect(gx * cellW, gy * cellH, cellW - 0.5, cellH - 0.5);
+        // Mirror on right side
+        c.fillRect((cols - 1 - gx) * cellW + 0.5, gy * cellH, cellW - 0.5, cellH - 0.5);
+      }
+    }
   }
 
-  // Layer 2: floating particles
-  const particleCount = 4 + Math.floor(density * 12);
-  const seed = density * 1000 + shimmer * 100 + breath * 10 + drift;
-  for (let i = 0; i < particleCount; i++) {
-    const pseudo = Math.sin(seed * (i + 1) * 127.1 + i * 311.7) * 0.5 + 0.5;
-    const pseudo2 = Math.sin(seed * (i + 1) * 269.5 + i * 183.3) * 0.5 + 0.5;
-    const x = pseudo * w + Math.sin(time * 0.5 + i) * drift * 8;
-    const y = pseudo2 * h + Math.cos(time * 0.4 + i * 0.7) * breath * 6;
-    const r = 1 + shimmer * 3 + pseudo * 2;
-    const alpha = isListening ? 0.15 + shimmer * 0.25 : 0.06 + shimmer * 0.1;
-    const hue = 230 + drift * 50 + pseudo * 30;
-    c.beginPath();
-    c.arc(((x % w) + w) % w, ((y % h) + h) % h, r, 0, Math.PI * 2);
-    c.fillStyle = `hsla(${hue}, ${30 + shimmer * 30}%, ${50 + shimmer * 20}%, ${alpha})`;
-    c.fill();
-  }
+  // Breath overlay: soft animated glow
+  const glowAlpha = 0.03 + breath * 0.06;
+  const gx = w * 0.5 + Math.sin(time * 0.4) * w * 0.15 * drift;
+  const gy = h * 0.5 + Math.cos(time * 0.3) * h * 0.2 * breath;
+  const grad = c.createRadialGradient(gx, gy, 0, gx, gy, w * 0.6);
+  grad.addColorStop(0, `hsla(${baseHue}, ${sat}%, 60%, ${glowAlpha})`);
+  grad.addColorStop(1, 'transparent');
+  c.fillStyle = grad;
+  c.fillRect(0, 0, w, h);
 
-  // Layer 3: breath waves
-  c.strokeStyle = `hsla(${240 + drift * 30}, ${20 + shimmer * 30}%, 50%, ${isListening ? 0.12 : 0.05})`;
-  c.lineWidth = 0.5 + breath;
-  c.beginPath();
-  for (let x = 0; x < w; x++) {
-    const freq1 = 0.02 + density * 0.03;
-    const freq2 = 0.05 + shimmer * 0.04;
-    const y = h * 0.5
-      + Math.sin(x * freq1 + time * 0.6 + drift * 5) * h * 0.15 * breath
-      + Math.sin(x * freq2 + time * 0.3) * h * 0.08 * shimmer;
-    x === 0 ? c.moveTo(x, y) : c.lineTo(x, y);
-  }
-  c.stroke();
-
-  // Subtle border glow when listening
-  if (isListening) {
-    c.strokeStyle = `hsla(250, 30%, 60%, 0.08)`;
-    c.lineWidth = 2;
-    c.strokeRect(1, 1, w - 2, h - 2);
+  // Shimmer: occasional bright pixels that twinkle
+  if (shimmer > 0.2) {
+    const sparkCount = Math.floor(shimmer * 8);
+    for (let i = 0; i < sparkCount; i++) {
+      const phase = Math.sin(time * 2 + i * 1.7 + seedVal * 0.001);
+      if (phase > 0.3) {
+        const sx = rand() * w;
+        const sy = rand() * h;
+        c.fillStyle = `hsla(${baseHue + 40}, 50%, 80%, ${phase * 0.3})`;
+        c.fillRect(sx, sy, 2, 2);
+      }
+    }
   }
 }
 
@@ -692,6 +729,9 @@ function rejectVariation(idx) {
   variations[idx] = mutate(neighbor, 0.2);
   renderCells();
   saveState();
+
+  // Reset cycle timer so user gets full listen time
+  if (!paused) startCycling();
 
   setTimeout(() => {
     if (!running) return;
