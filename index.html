@@ -183,6 +183,8 @@
     display: flex;
     gap: 8px;
     align-items: center;
+    flex-wrap: wrap;
+    justify-content: center;
     opacity: 0;
     transition: opacity 1.5s ease;
   }
@@ -191,6 +193,41 @@
     font-size: 9px;
     letter-spacing: 2px;
     color: #333350;
+  }
+  .slider-control {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .slider-control label {
+    font-size: 8px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: #444460;
+    white-space: nowrap;
+  }
+  .slider-control input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 60px;
+    height: 2px;
+    background: #222240;
+    outline: none;
+    border-radius: 1px;
+  }
+  .slider-control input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: #555580;
+    cursor: pointer;
+  }
+  .slider-control input[type="range"]::-moz-range-thumb {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: #555580;
+    cursor: pointer;
+    border: none;
   }
 </style>
 </head>
@@ -204,31 +241,50 @@
   </div>
   <div class="bottom-row" id="bottomRow">
     <button class="ctrl-btn" id="pauseBtn">pause</button>
-    <button class="ctrl-btn" id="viewBtn">art</button>
+    <button class="ctrl-btn" id="viewBtn">params</button>
     <span class="hint">+ keep, &#x2212; reroll</span>
+    <div class="slider-control">
+      <label>fade</label>
+      <input type="range" id="fadeSlider" min="1" max="8" step="0.5" value="3">
+    </div>
+    <div class="slider-control">
+      <label>dwell</label>
+      <input type="range" id="dwellSlider" min="6" max="30" step="1" value="12">
+    </div>
   </div>
 </div>
 
 <script>
 const $ = id => document.getElementById(id);
 const NUM_CELLS = 8;
-const PARAM_NAMES = ['density', 'shimmer', 'breath', 'drift'];
-const STORAGE_KEY = 'drone-state-v2';
-const CYCLE_TIME = 8000;
+const PARAM_NAMES = ['density', 'shimmer', 'breath', 'drift', 'chimes'];
+const STORAGE_KEY = 'drone-state-v3';
 
 let ctx, running = false, paused = false;
 let masterGain, noiseBuf;
 let viewMode = 'art'; // 'art' or 'params'
+let fadeTime = 3;   // crossfade seconds
+let dwellTime = 12; // seconds per cell
 let variations = [];
 let currentListening = 0;
 let cycleTimer = null;
 let artAnimId = null;
 const slots = new Array(NUM_CELLS).fill(null);
 
-const FREQ_POOL = [
-  220, 233.08, 246.94, 261.63, 277.18, 293.66, 311.13, 329.63,
-  349.23, 369.99, 392.00, 415.30, 440, 466.16, 493.88, 523.25,
-  554.37, 587.33, 622.25, 659.25, 698.46, 739.99, 783.99, 830.61
+// Diatonic/pentatonic scale degrees rooted on concert pitches.
+// These are "safe" consonant intervals — no microtonal wolf tones.
+// Major pentatonic on D: D E F# A B across octaves
+const SCALE_FREQS = [
+  // Octave 3
+  293.66, 329.63, 369.99, 440.00, 493.88,
+  // Octave 4
+  587.33, 659.25, 739.99, 880.00, 987.77
+];
+
+// Chime frequencies: high pentatonic, sparkly register
+const CHIME_FREQS = [
+  1174.66, 1318.51, 1479.98, 1760.00, 1975.53, // octave 6
+  2349.32, 2637.02, 2959.96                       // octave 7
 ];
 
 // --- State persistence ---
@@ -236,7 +292,7 @@ const FREQ_POOL = [
 function saveState() {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({
-      variations, currentListening, paused, viewMode
+      variations, currentListening, paused, viewMode, fadeTime, dwellTime
     }));
   } catch(e) {}
 }
@@ -268,7 +324,8 @@ function generateChain() {
     density: 0.3 + Math.random() * 0.4,
     shimmer: 0.2 + Math.random() * 0.4,
     breath:  0.3 + Math.random() * 0.4,
-    drift:   0.1 + Math.random() * 0.4
+    drift:   0.1 + Math.random() * 0.4,
+    chimes:  Math.random() * 0.5
   };
   for (let i = 0; i < NUM_CELLS; i++) {
     current = (i === 0) ? { ...current } : mutate(current, 0.2);
@@ -342,14 +399,15 @@ function drawCellArt(canvas, params, isListening, time) {
   const c = canvas.getContext('2d');
   const w = canvas.width, h = canvas.height;
 
-  const { density, shimmer, breath, drift } = params;
+  const { density, shimmer, breath, drift, chimes } = params;
 
   // Deterministic seed from params (quantized so similar params = similar art)
   const q = 40; // quantization level
-  const seedVal = (Math.round(density * q) * 1000000
-    + Math.round(shimmer * q) * 10000
-    + Math.round(breath * q) * 100
-    + Math.round(drift * q));
+  const seedVal = (Math.round(density * q) * 10000000
+    + Math.round(shimmer * q) * 100000
+    + Math.round(breath * q) * 1000
+    + Math.round(drift * q) * 10
+    + Math.round((chimes || 0) * q));
   const rand = seededRand(seedVal + 1);
 
   // Background
@@ -424,6 +482,27 @@ function drawCellArt(canvas, params, isListening, time) {
       }
     }
   }
+
+  // Chimes: small bright diamond shapes, scattered
+  const chimesVal = chimes || 0;
+  if (chimesVal > 0.1) {
+    const chimeCount = Math.floor(chimesVal * 6);
+    for (let i = 0; i < chimeCount; i++) {
+      const cx = rand() * w;
+      const cy = rand() * h;
+      const phase = Math.sin(time * 3 + i * 2.3 + seedVal * 0.002);
+      const size = 2 + phase * 1.5;
+      const alpha = isListening ? 0.4 + phase * 0.3 : 0.15 + phase * 0.1;
+      if (alpha > 0.1) {
+        c.save();
+        c.translate(cx, cy);
+        c.rotate(Math.PI / 4);
+        c.fillStyle = `hsla(${baseHue + 80}, 60%, 75%, ${alpha})`;
+        c.fillRect(-size / 2, -size / 2, size, size);
+        c.restore();
+      }
+    }
+  }
 }
 
 function drawAllArt() {
@@ -465,13 +544,15 @@ function createVoice(audioCtx, dest, freq) {
   const pan = audioCtx.createStereoPanner();
   const filter = audioCtx.createBiquadFilter();
 
-  osc.type = Math.random() > 0.8 ? 'triangle' : 'sine';
+  // All sine for softer tone
+  osc.type = 'sine';
   osc.frequency.value = freq;
   gain.gain.value = 0;
   pan.pan.value = Math.random() * 2 - 1;
-  filter.type = 'bandpass';
-  filter.frequency.value = freq;
-  filter.Q.value = 0.5 + Math.random() * 2;
+  // Gentle lowpass instead of bandpass — removes harshness
+  filter.type = 'lowpass';
+  filter.frequency.value = freq * 1.5 + 200;
+  filter.Q.value = 0.3 + Math.random() * 0.5;
 
   osc.connect(filter);
   filter.connect(gain);
@@ -479,10 +560,46 @@ function createVoice(audioCtx, dest, freq) {
   pan.connect(dest);
   osc.start();
 
-  const targetGain = 0.02 + Math.random() * 0.04;
+  const targetGain = 0.02 + Math.random() * 0.03;
   gain.gain.setTargetAtTime(targetGain, audioCtx.currentTime, 4 + Math.random() * 8);
 
   return { osc, gain, pan, filter, freq, targetGain, alive: true };
+}
+
+function createChime(audioCtx, dest) {
+  // Wind chime: short high-register ping with fast decay
+  const freq = CHIME_FREQS[Math.floor(Math.random() * CHIME_FREQS.length)];
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  const pan = audioCtx.createStereoPanner();
+  const filter = audioCtx.createBiquadFilter();
+
+  osc.type = 'sine';
+  osc.frequency.value = freq;
+  // Slight detune for shimmer
+  osc.detune.value = (Math.random() - 0.5) * 15;
+  gain.gain.value = 0;
+  pan.pan.value = Math.random() * 2 - 1;
+  filter.type = 'bandpass';
+  filter.frequency.value = freq;
+  filter.Q.value = 8 + Math.random() * 8; // resonant ping
+
+  osc.connect(filter);
+  filter.connect(gain);
+  gain.connect(pan);
+  pan.connect(dest);
+
+  const now = audioCtx.currentTime;
+  const delay = Math.random() * 0.3; // slight stagger
+  osc.start(now + delay);
+
+  // Quick attack, slow-ish decay
+  gain.gain.setValueAtTime(0, now + delay);
+  gain.gain.linearRampToValueAtTime(0.008 + Math.random() * 0.006, now + delay + 0.02);
+  gain.gain.exponentialRampToValueAtTime(0.0001, now + delay + 1.5 + Math.random() * 2);
+
+  const stopTime = delay + 4;
+  osc.stop(now + stopTime);
 }
 
 function createBreathLayer(audioCtx, dest) {
@@ -519,11 +636,12 @@ function createBreathLayer(audioCtx, dest) {
 }
 
 function pickCluster(count) {
-  const root = Math.floor(Math.random() * (FREQ_POOL.length - 6));
+  // Pick from pentatonic scale — always consonant
+  const root = Math.floor(Math.random() * (SCALE_FREQS.length - 3));
   const cluster = [];
   for (let i = 0; i < count; i++) {
-    const idx = root + Math.floor(Math.random() * 6);
-    cluster.push(FREQ_POOL[Math.min(idx, FREQ_POOL.length - 1)] * (Math.random() > 0.15 ? 1 : 2));
+    const idx = root + Math.floor(Math.random() * 4);
+    cluster.push(SCALE_FREQS[Math.min(idx, SCALE_FREQS.length - 1)]);
   }
   return cluster;
 }
@@ -549,32 +667,44 @@ function createSlot(params) {
 
     voices.forEach(v => {
       if (!v.alive) return;
+      // Gentle drift: stay near consonant tones
+      const driftHz = params.drift * 2;
       v.osc.frequency.setTargetAtTime(
-        v.freq + (Math.random() - 0.5) * params.drift * 3, now, 8 + Math.random() * 12
+        v.freq + (Math.random() - 0.5) * driftHz, now, 10 + Math.random() * 15
       );
-      const newPan = Math.max(-1, Math.min(1, v.pan.pan.value + (Math.random() - 0.5) * 0.3));
-      v.pan.pan.setTargetAtTime(newPan, now, 5);
-      const shimFreq = v.freq * (1 + params.shimmer * (Math.random() - 0.3) * 2);
-      v.filter.frequency.setTargetAtTime(shimFreq, now, 3 + Math.random() * 4);
+      const newPan = Math.max(-1, Math.min(1, v.pan.pan.value + (Math.random() - 0.5) * 0.2));
+      v.pan.pan.setTargetAtTime(newPan, now, 6);
+      // Gentle filter modulation
+      const shimFreq = v.freq * (1.2 + params.shimmer * 0.8);
+      v.filter.frequency.setTargetAtTime(shimFreq, now, 4 + Math.random() * 5);
     });
 
     breaths.forEach(n => {
       if (!n.alive) return;
-      n.gain.gain.setTargetAtTime(n.targetGain * params.breath, now, 4);
-      n.bp.frequency.setTargetAtTime(1000 + Math.random() * 2000, now, 6 + Math.random() * 6);
-      const newPan = Math.max(-1, Math.min(1, n.pan.pan.value + (Math.random() - 0.5) * 0.4));
-      n.pan.pan.setTargetAtTime(newPan, now, 4);
+      n.gain.gain.setTargetAtTime(n.targetGain * params.breath, now, 5);
+      n.bp.frequency.setTargetAtTime(1000 + Math.random() * 2000, now, 8 + Math.random() * 6);
+      const newPan = Math.max(-1, Math.min(1, n.pan.pan.value + (Math.random() - 0.5) * 0.3));
+      n.pan.pan.setTargetAtTime(newPan, now, 5);
     });
 
-    if (Math.random() < 0.04 * params.shimmer) {
-      const highFreq = FREQ_POOL[Math.floor(FREQ_POOL.length * 0.4) + Math.floor(Math.random() * 6)];
-      const ghost = createVoice(ctx, slotGain, highFreq);
+    // Ghost melodic hint — uses scale tones, always consonant
+    if (Math.random() < 0.03 * params.shimmer) {
+      const ghostFreq = SCALE_FREQS[Math.floor(Math.random() * SCALE_FREQS.length)];
+      const ghost = createVoice(ctx, slotGain, ghostFreq);
       ghost.gain.gain.cancelScheduledValues(now);
       ghost.gain.gain.setValueAtTime(0, now);
-      ghost.gain.gain.setTargetAtTime(0.005, now, 3);
-      ghost.gain.gain.setTargetAtTime(0, now + 6 + Math.random() * 8, 4);
+      ghost.gain.gain.setTargetAtTime(0.004, now, 4);
+      ghost.gain.gain.setTargetAtTime(0, now + 8 + Math.random() * 10, 5);
       ghost.alive = false;
-      setTimeout(() => { try { ghost.osc.stop(); } catch(e) {} }, 25000);
+      setTimeout(() => { try { ghost.osc.stop(); } catch(e) {} }, 30000);
+    }
+
+    // Wind chimes — occasional tinklings, 1-3 at a time
+    if (params.chimes > 0.05 && Math.random() < 0.08 * params.chimes) {
+      const count = 1 + Math.floor(Math.random() * 2 * params.chimes);
+      for (let c = 0; c < count; c++) {
+        createChime(ctx, slotGain);
+      }
     }
 
     evolveId = setTimeout(evolve, 3000 + Math.random() * 4000);
@@ -584,8 +714,8 @@ function createSlot(params) {
 
   return {
     slotGain, voices, breaths, params,
-    fadeIn() { slotGain.gain.setTargetAtTime(1, ctx.currentTime, 1.5); },
-    fadeOut() { slotGain.gain.setTargetAtTime(0, ctx.currentTime, 1.5); },
+    fadeIn() { slotGain.gain.setTargetAtTime(1, ctx.currentTime, fadeTime); },
+    fadeOut() { slotGain.gain.setTargetAtTime(0, ctx.currentTime, fadeTime); },
     destroy() {
       clearTimeout(evolveId);
       slotGain.gain.setTargetAtTime(0, ctx.currentTime, 0.5);
@@ -623,7 +753,7 @@ function init() {
     fb.gain.value = 0.4 + Math.random() * 0.2;
     const filt = ctx.createBiquadFilter();
     filt.type = 'lowpass';
-    filt.frequency.value = 2000 + Math.random() * 2000;
+    filt.frequency.value = 1500 + Math.random() * 1500;
     masterGain.connect(d);
     d.connect(filt);
     filt.connect(fb);
@@ -680,7 +810,7 @@ function startCycling() {
   clearInterval(cycleTimer);
   cycleTimer = setInterval(() => {
     highlightSlot((currentListening + 1) % NUM_CELLS);
-  }, CYCLE_TIME);
+  }, dwellTime * 1000);
 }
 
 // Upvote: keep this cell, reroll all others as a chain from it
@@ -815,10 +945,14 @@ $('startBtn').addEventListener('click', () => {
     if (saved) {
       paused = saved.paused;
       viewMode = saved.viewMode || 'art';
+      fadeTime = saved.fadeTime || 3;
+      dwellTime = saved.dwellTime || 12;
     }
     $('pauseBtn').textContent = paused ? 'cycle' : 'pause';
     $('pauseBtn').classList.toggle('active', paused);
     $('viewBtn').textContent = viewMode === 'art' ? 'params' : 'art';
+    $('fadeSlider').value = fadeTime;
+    $('dwellSlider').value = dwellTime;
     init();
   } else {
     running = false;
@@ -858,6 +992,17 @@ $('viewBtn').addEventListener('click', () => {
   // Re-apply listening state
   const cells = document.querySelectorAll('.cell');
   cells.forEach((cell, i) => cell.classList.toggle('listening', i === currentListening));
+  saveState();
+});
+
+$('fadeSlider').addEventListener('input', () => {
+  fadeTime = parseFloat($('fadeSlider').value);
+  saveState();
+});
+
+$('dwellSlider').addEventListener('input', () => {
+  dwellTime = parseFloat($('dwellSlider').value);
+  if (!paused) startCycling();
   saveState();
 });
 </script>
