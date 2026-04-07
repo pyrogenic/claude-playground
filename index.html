@@ -125,6 +125,12 @@
     box-shadow: 0 0 20px rgba(90, 90, 160, 0.15);
     background: rgba(20, 20, 35, 0.8);
   }
+  .cell.sticky {
+    border-color: #445566;
+  }
+  .cell.sticky .vote-btn[data-action="up"] {
+    color: #6688aa;
+  }
   .cell .param-row {
     display: flex;
     justify-content: space-between;
@@ -328,7 +334,7 @@ function generateChain() {
     chimes:  Math.random() * 0.5
   };
   for (let i = 0; i < NUM_CELLS; i++) {
-    current = (i === 0) ? { ...current } : mutate(current, 0.2);
+    current = (i === 0) ? { ...current } : mutate(current, 0.1);
     variations.push({ ...current });
   }
 }
@@ -595,8 +601,8 @@ function createChime(audioCtx, dest) {
 
   // Quick attack, slow-ish decay
   gain.gain.setValueAtTime(0, now + delay);
-  gain.gain.linearRampToValueAtTime(0.008 + Math.random() * 0.006, now + delay + 0.02);
-  gain.gain.exponentialRampToValueAtTime(0.0001, now + delay + 1.5 + Math.random() * 2);
+  gain.gain.linearRampToValueAtTime(0.02 + Math.random() * 0.015, now + delay + 0.02);
+  gain.gain.exponentialRampToValueAtTime(0.0001, now + delay + 2 + Math.random() * 2.5);
 
   const stopTime = delay + 4;
   osc.stop(now + stopTime);
@@ -800,7 +806,7 @@ function highlightSlot(idx) {
       else slots[i].fadeOut();
     }
   }
-  // Scroll the active cell into view
+  updateStickyClasses();
   const activeCell = cells[idx];
   if (activeCell) activeCell.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   saveState();
@@ -814,50 +820,54 @@ function startCycling() {
 }
 
 // Upvote: keep this cell, reroll all others as a chain from it
+// Upvote: mark sticky, gently regenerate 2-3 nearest non-sticky neighbors
 function selectVariation(idx) {
-  const kept = { ...variations[idx] };
+  variations[idx].sticky = true;
 
-  // Tear down other slots
-  for (let i = 0; i < NUM_CELLS; i++) {
-    if (i === idx) continue;
+  // Determine which neighbors to regenerate (up to 2 in each direction, skip sticky)
+  const toRegen = [];
+  for (let d = 1; d <= 3; d++) {
+    const fwd = idx + d, bck = idx - d;
+    if (fwd < NUM_CELLS && !variations[fwd].sticky) toRegen.push(fwd);
+    if (bck >= 0 && !variations[bck].sticky) toRegen.push(bck);
+  }
+
+  // Tear down and regenerate only those
+  for (const i of toRegen) {
     if (slots[i]) slots[i].destroy();
     slots[i] = null;
-  }
-
-  // Rebuild chain: idx stays, walk outward in both directions
-  variations[idx] = kept;
-  // Forward from idx
-  for (let i = idx + 1; i < NUM_CELLS; i++) {
-    variations[i] = mutate(variations[i - 1], 0.15);
-  }
-  // Backward from idx
-  for (let i = idx - 1; i >= 0; i--) {
-    variations[i] = mutate(variations[i + 1], 0.15);
+    // Mutate from nearest neighbor toward the upvoted cell
+    const toward = i < idx ? i + 1 : i - 1;
+    const dist = Math.abs(i - idx);
+    variations[i] = mutate(variations[toward], 0.06 + dist * 0.03);
   }
 
   renderCells();
+  updateStickyClasses();
   saveState();
 
   setTimeout(() => {
     if (!running) return;
-    for (let i = 0; i < NUM_CELLS; i++) {
-      if (i === idx) continue;
+    for (const i of toRegen) {
       slots[i] = createSlot(variations[i]);
+      if (currentListening === i) slots[i].fadeIn();
     }
-    highlightSlot(idx);
     if (!paused) startCycling();
-  }, 1500);
+  }, 1000);
 }
 
-// Downvote: reroll just this cell from its neighbors
+// Downvote: reroll this cell from neighbor (unless sticky — unstick first)
 function rejectVariation(idx) {
   if (slots[idx]) slots[idx].destroy();
   slots[idx] = null;
 
-  // Mutate from a neighbor
+  variations[idx].sticky = false;
+
+  // Mutate from nearest neighbor
   const neighbor = idx > 0 ? variations[idx - 1] : variations[idx + 1];
-  variations[idx] = mutate(neighbor, 0.2);
+  variations[idx] = mutate(neighbor, 0.12);
   renderCells();
+  updateStickyClasses();
   saveState();
 
   // Reset cycle timer so user gets full listen time
@@ -868,6 +878,13 @@ function rejectVariation(idx) {
     slots[idx] = createSlot(variations[idx]);
     if (currentListening === idx) slots[idx].fadeIn();
   }, 1000);
+}
+
+function updateStickyClasses() {
+  const cells = document.querySelectorAll('.cell');
+  cells.forEach((cell, i) => {
+    cell.classList.toggle('sticky', !!(variations[i] && variations[i].sticky));
+  });
 }
 
 // --- Event delegation ---
