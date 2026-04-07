@@ -225,14 +225,32 @@
 <script>
 const $ = id => document.getElementById(id);
 
-let ctx, running = false, paused = false;
+let ctx, running = false;
+let paused = false;
 let masterGain, noiseBuf;
 const PARAM_NAMES = ['density', 'shimmer', 'breath', 'drift'];
 
+const STORAGE_KEY = 'drone-state';
+
+function saveState() {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ basis, variations, currentListening, paused }));
+  } catch(e) {}
+}
+
+function loadState() {
+  try {
+    const s = JSON.parse(localStorage.getItem(STORAGE_KEY));
+    if (s && s.basis && s.variations && s.variations.length === 4) return s;
+  } catch(e) {}
+  return null;
+}
+
 // Current basis and 4 variations
-let basis = { density: 0.5, shimmer: 0.4, breath: 0.6, drift: 0.3 };
-let variations = [];
-let currentListening = 0;
+const saved = loadState();
+let basis = saved ? saved.basis : { density: 0.5, shimmer: 0.4, breath: 0.6, drift: 0.3 };
+let variations = saved ? saved.variations : [];
+let currentListening = saved ? saved.currentListening : 0;
 let cycleTimer = null;
 
 // Active audio per variation slot
@@ -492,9 +510,10 @@ function init() {
   comp.connect(masterHP);
   masterHP.connect(ctx.destination);
 
-  generateVariations();
+  if (variations.length !== 4) generateVariations();
+  else renderVariationCards();
   startAllSlots();
-  startCycling();
+  if (!paused) startCycling();
   startVisualization();
 }
 
@@ -519,6 +538,7 @@ function highlightSlot(idx) {
       else slots[i].fadeOut();
     }
   }
+  saveState();
 }
 
 function startCycling() {
@@ -549,6 +569,7 @@ function selectVariation(idx) {
     variations[i] = (i === idx) ? { ...kept } : mutate(basis, 0.4);
   }
   renderVariationCards();
+  saveState();
 
   // Small delay so old audio fades before new starts
   setTimeout(() => {
@@ -569,6 +590,7 @@ function rejectVariation(idx) {
 
   variations[idx] = mutate(basis, 0.4);
   renderVariationCards();
+  saveState();
 
   setTimeout(() => {
     if (!running) return;
@@ -648,9 +670,11 @@ $('startBtn').addEventListener('click', () => {
     $('cycleIndicator').classList.add('visible');
     $('hint').classList.add('visible');
     $('pauseBtn').classList.add('visible');
-    paused = false;
-    $('pauseBtn').textContent = 'pause';
-    $('pauseBtn').classList.remove('paused');
+    // Restore saved pause state
+    const savedState = loadState();
+    if (savedState) paused = savedState.paused;
+    $('pauseBtn').textContent = paused ? 'cycle' : 'pause';
+    $('pauseBtn').classList.toggle('paused', paused);
     init();
   } else {
     running = false;
@@ -680,6 +704,7 @@ $('pauseBtn').addEventListener('click', () => {
     $('pauseBtn').textContent = 'pause';
     $('pauseBtn').classList.remove('paused');
   }
+  saveState();
 });
 </script>
 </body>
