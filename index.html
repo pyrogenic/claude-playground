@@ -14,11 +14,10 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: center;
     overflow: hidden;
     user-select: none;
   }
-  canvas {
+  canvas#viz {
     position: fixed;
     top: 0; left: 0;
     width: 100%; height: 100%;
@@ -31,7 +30,10 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 24px;
+    gap: 16px;
+    padding: 20px 0 10px;
+    width: 100%;
+    max-width: 400px;
   }
   h1 {
     font-size: 14px;
@@ -40,9 +42,30 @@
     color: #555570;
     font-weight: 300;
   }
+  .top-row {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+  }
+  .ctrl-btn {
+    font-family: inherit;
+    font-size: 9px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: #555570;
+    background: none;
+    border: 1px solid #333350;
+    border-radius: 4px;
+    padding: 5px 12px;
+    cursor: pointer;
+    outline: none;
+    transition: all 0.8s ease;
+  }
+  .ctrl-btn:hover { border-color: #555580; }
+  .ctrl-btn.active { color: #6666aa; border-color: #555588; }
   #startBtn {
-    width: 100px;
-    height: 100px;
+    width: 80px;
+    height: 80px;
     border-radius: 50%;
     border: 1px solid #333350;
     background: radial-gradient(circle at 40% 40%, #1a1a2e, #0a0a15);
@@ -64,140 +87,110 @@
     box-shadow: 0 0 50px rgba(100, 100, 160, 0.2);
     background: radial-gradient(circle at 40% 40%, #22223a, #0e0e1a);
   }
-  .variations {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 12px;
+  .grid-wrap {
+    width: 100%;
+    max-height: calc(100vh - 200px);
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 0 16px;
     opacity: 0;
     transition: opacity 1.5s ease;
-    max-width: 340px;
-    width: 100%;
-    padding: 0 20px;
+    scrollbar-width: thin;
+    scrollbar-color: #222240 transparent;
   }
-  .variations.visible { opacity: 1; }
-  .variation {
+  .grid-wrap::-webkit-scrollbar { width: 4px; }
+  .grid-wrap::-webkit-scrollbar-track { background: transparent; }
+  .grid-wrap::-webkit-scrollbar-thumb { background: #222240; border-radius: 2px; }
+  .grid-wrap.visible { opacity: 1; }
+  .grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    padding-bottom: 12px;
+  }
+  .cell {
     border: 1px solid #222240;
     border-radius: 8px;
-    padding: 14px 12px 10px;
-    transition: all 1.2s ease;
+    padding: 8px;
+    transition: all 1.0s ease;
     background: rgba(15, 15, 25, 0.6);
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 4px;
+    min-height: 0;
   }
-  .variation:hover {
-    border-color: #444468;
-  }
-  .variation.listening {
+  .cell:hover { border-color: #444468; }
+  .cell.listening {
     border-color: #555588;
     box-shadow: 0 0 20px rgba(90, 90, 160, 0.15);
     background: rgba(20, 20, 35, 0.8);
   }
-  .variation.selected {
-    border-color: #7777aa;
-    box-shadow: 0 0 30px rgba(100, 100, 180, 0.2);
-  }
-  .variation .param-row {
+  .cell .param-row {
     display: flex;
     justify-content: space-between;
     align-items: center;
   }
-  .variation .param-label {
-    font-size: 8px;
+  .cell .param-label {
+    font-size: 7px;
     letter-spacing: 2px;
     text-transform: uppercase;
     color: #444460;
   }
-  .variation .param-bar {
-    width: 50px;
-    height: 3px;
+  .cell .param-bar {
+    width: 45px;
+    height: 2px;
     background: #1a1a30;
-    border-radius: 2px;
+    border-radius: 1px;
     overflow: hidden;
   }
-  .variation .param-fill {
+  .cell .param-fill {
     height: 100%;
     background: #444468;
-    border-radius: 2px;
+    border-radius: 1px;
     transition: width 0.8s ease, background 0.8s ease;
   }
-  .variation.listening .param-fill {
-    background: #6666aa;
+  .cell.listening .param-fill { background: #6666aa; }
+  .cell canvas.cell-art {
+    width: 100%;
+    aspect-ratio: 2 / 1;
+    border-radius: 4px;
+    display: block;
   }
+  .params-view { display: flex; flex-direction: column; gap: 3px; }
   .vote-row {
     display: flex;
     justify-content: center;
-    gap: 16px;
-    margin-top: 4px;
+    gap: 14px;
+    margin-top: 2px;
   }
   .vote-btn {
     font-family: inherit;
-    font-size: 14px;
+    font-size: 13px;
     background: none;
     border: 1px solid transparent;
     border-radius: 4px;
-    padding: 2px 10px;
+    padding: 1px 10px;
     cursor: pointer;
     color: #444460;
     transition: all 0.4s ease;
     outline: none;
     line-height: 1;
   }
-  .vote-btn:hover {
-    color: #8888aa;
-    border-color: #444468;
-  }
-  .variation.listening .vote-btn {
-    color: #666688;
-  }
-  .variation.listening .vote-btn:hover {
-    color: #aaaacc;
-    border-color: #555588;
-  }
-  #pauseBtn {
-    font-family: inherit;
-    font-size: 9px;
-    letter-spacing: 3px;
-    text-transform: uppercase;
-    color: #555570;
-    background: none;
-    border: 1px solid #333350;
-    border-radius: 4px;
-    padding: 5px 14px;
-    cursor: pointer;
-    outline: none;
-    transition: all 0.8s ease;
+  .vote-btn:hover { color: #8888aa; border-color: #444468; }
+  .cell.listening .vote-btn { color: #666688; }
+  .cell.listening .vote-btn:hover { color: #aaaacc; border-color: #555588; }
+  .bottom-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
     opacity: 0;
+    transition: opacity 1.5s ease;
   }
-  #pauseBtn.visible { opacity: 1; }
-  #pauseBtn:hover { border-color: #555580; }
-  #pauseBtn.paused { color: #6666aa; border-color: #555588; }
+  .bottom-row.visible { opacity: 1; }
   .hint {
     font-size: 9px;
     letter-spacing: 2px;
     color: #333350;
-    text-align: center;
-    opacity: 0;
-    transition: opacity 1.5s ease;
-  }
-  .hint.visible { opacity: 1; }
-  .cycle-indicator {
-    display: flex;
-    gap: 6px;
-    justify-content: center;
-    opacity: 0;
-    transition: opacity 1.5s ease;
-  }
-  .cycle-indicator.visible { opacity: 1; }
-  .cycle-dot {
-    width: 5px;
-    height: 5px;
-    border-radius: 50%;
-    background: #222240;
-    transition: background 0.8s ease;
-  }
-  .cycle-dot.active {
-    background: #6666aa;
   }
 </style>
 </head>
@@ -206,61 +199,57 @@
 <div class="controls">
   <h1>Drone</h1>
   <button id="startBtn">begin</button>
-  <div class="variations" id="variations">
-    <div class="variation" data-idx="0"></div>
-    <div class="variation" data-idx="1"></div>
-    <div class="variation" data-idx="2"></div>
-    <div class="variation" data-idx="3"></div>
+  <div class="grid-wrap" id="gridWrap">
+    <div class="grid" id="grid"></div>
   </div>
-  <div class="cycle-indicator" id="cycleIndicator">
-    <div class="cycle-dot" data-idx="0"></div>
-    <div class="cycle-dot" data-idx="1"></div>
-    <div class="cycle-dot" data-idx="2"></div>
-    <div class="cycle-dot" data-idx="3"></div>
+  <div class="bottom-row" id="bottomRow">
+    <button class="ctrl-btn" id="pauseBtn">pause</button>
+    <button class="ctrl-btn" id="viewBtn">art</button>
+    <span class="hint">+ keep, &#x2212; reroll</span>
   </div>
-  <button id="pauseBtn">pause</button>
-  <div class="hint" id="hint">+ to explore, &#x2212; to replace</div>
 </div>
 
 <script>
 const $ = id => document.getElementById(id);
-
-let ctx, running = false;
-let paused = false;
-let masterGain, noiseBuf;
+const NUM_CELLS = 8;
 const PARAM_NAMES = ['density', 'shimmer', 'breath', 'drift'];
+const STORAGE_KEY = 'drone-state-v2';
+const CYCLE_TIME = 8000;
 
-const STORAGE_KEY = 'drone-state';
-
-function saveState() {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ basis, variations, currentListening, paused }));
-  } catch(e) {}
-}
-
-function loadState() {
-  try {
-    const s = JSON.parse(localStorage.getItem(STORAGE_KEY));
-    if (s && s.basis && s.variations && s.variations.length === 4) return s;
-  } catch(e) {}
-  return null;
-}
-
-// Current basis and 4 variations
-const saved = loadState();
-let basis = saved ? saved.basis : { density: 0.5, shimmer: 0.4, breath: 0.6, drift: 0.3 };
-let variations = saved ? saved.variations : [];
-let currentListening = saved ? saved.currentListening : 0;
+let ctx, running = false, paused = false;
+let masterGain, noiseBuf;
+let viewMode = 'art'; // 'art' or 'params'
+let variations = [];
+let currentListening = 0;
 let cycleTimer = null;
-
-// Active audio per variation slot
-const slots = [null, null, null, null];
+let artAnimId = null;
+const slots = new Array(NUM_CELLS).fill(null);
 
 const FREQ_POOL = [
   220, 233.08, 246.94, 261.63, 277.18, 293.66, 311.13, 329.63,
   349.23, 369.99, 392.00, 415.30, 440, 466.16, 493.88, 523.25,
   554.37, 587.33, 622.25, 659.25, 698.46, 739.99, 783.99, 830.61
 ];
+
+// --- State persistence ---
+
+function saveState() {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+      variations, currentListening, paused, viewMode
+    }));
+  } catch(e) {}
+}
+
+function loadState() {
+  try {
+    const s = JSON.parse(localStorage.getItem(STORAGE_KEY));
+    if (s && s.variations && s.variations.length === NUM_CELLS) return s;
+  } catch(e) {}
+  return null;
+}
+
+// --- Variations ---
 
 function clamp01(v) { return Math.max(0, Math.min(1, v)); }
 
@@ -272,32 +261,153 @@ function mutate(base, amount) {
   return result;
 }
 
-function generateVariations() {
+function generateChain() {
+  // Start from a random seed, each cell is a subtle mutation of the previous
   variations = [];
-  for (let i = 0; i < 4; i++) {
-    variations.push(mutate(basis, 0.4));
+  let current = {
+    density: 0.3 + Math.random() * 0.4,
+    shimmer: 0.2 + Math.random() * 0.4,
+    breath:  0.3 + Math.random() * 0.4,
+    drift:   0.1 + Math.random() * 0.4
+  };
+  for (let i = 0; i < NUM_CELLS; i++) {
+    current = (i === 0) ? { ...current } : mutate(current, 0.2);
+    variations.push({ ...current });
   }
-  renderVariationCards();
 }
 
-function renderVariationCards() {
-  const cards = document.querySelectorAll('.variation');
-  cards.forEach((card, i) => {
+// --- Build DOM ---
+
+function buildGrid() {
+  const grid = $('grid');
+  grid.innerHTML = '';
+  for (let i = 0; i < NUM_CELLS; i++) {
+    const cell = document.createElement('div');
+    cell.className = 'cell';
+    cell.dataset.idx = i;
+    grid.appendChild(cell);
+  }
+  renderCells();
+}
+
+function renderCells() {
+  const cells = document.querySelectorAll('.cell');
+  cells.forEach((cell, i) => {
     const v = variations[i];
-    card.innerHTML = PARAM_NAMES.map(p => `
-      <div class="param-row">
-        <span class="param-label">${p}</span>
-        <div class="param-bar">
-          <div class="param-fill" style="width: ${v[p] * 100}%"></div>
+    if (!v) return;
+    if (viewMode === 'params') {
+      cell.innerHTML = `
+        <div class="params-view">
+          ${PARAM_NAMES.map(p => `
+            <div class="param-row">
+              <span class="param-label">${p}</span>
+              <div class="param-bar">
+                <div class="param-fill" style="width: ${v[p] * 100}%"></div>
+              </div>
+            </div>
+          `).join('')}
         </div>
-      </div>
-    `).join('') + `
-      <div class="vote-row">
-        <button class="vote-btn" data-action="down" data-idx="${i}">&#x2212;</button>
-        <button class="vote-btn" data-action="up" data-idx="${i}">+</button>
-      </div>
-    `;
+        <div class="vote-row">
+          <button class="vote-btn" data-action="down" data-idx="${i}">&#x2212;</button>
+          <button class="vote-btn" data-action="up" data-idx="${i}">+</button>
+        </div>
+      `;
+    } else {
+      cell.innerHTML = `
+        <canvas class="cell-art" data-idx="${i}" width="160" height="80"></canvas>
+        <div class="vote-row">
+          <button class="vote-btn" data-action="down" data-idx="${i}">&#x2212;</button>
+          <button class="vote-btn" data-action="up" data-idx="${i}">+</button>
+        </div>
+      `;
+    }
   });
+  if (viewMode === 'art') drawAllArt();
+}
+
+// --- Procedural art per cell ---
+// Each cell gets a deterministic-ish visual based on its 4 params.
+// We use a seeded approach: hash the params to get a seed, then draw.
+
+function drawCellArt(canvas, params, isListening, time) {
+  const c = canvas.getContext('2d');
+  const w = canvas.width, h = canvas.height;
+
+  c.fillStyle = '#0a0a14';
+  c.fillRect(0, 0, w, h);
+
+  const { density, shimmer, breath, drift } = params;
+
+  // Layer 1: soft gradient bands driven by density and drift
+  const bandCount = 3 + Math.floor(density * 6);
+  for (let i = 0; i < bandCount; i++) {
+    const t = i / bandCount;
+    const y = h * t + Math.sin(t * 6.28 + drift * 10 + time * 0.3) * h * 0.08 * breath;
+    const alpha = 0.04 + shimmer * 0.06;
+    const hue = 220 + drift * 60 + i * 8;
+    const sat = 20 + shimmer * 40;
+    c.fillStyle = `hsla(${hue}, ${sat}%, ${35 + shimmer * 20}%, ${alpha})`;
+    c.fillRect(0, y - 4, w, 8 + density * 4);
+  }
+
+  // Layer 2: floating particles
+  const particleCount = 4 + Math.floor(density * 12);
+  const seed = density * 1000 + shimmer * 100 + breath * 10 + drift;
+  for (let i = 0; i < particleCount; i++) {
+    const pseudo = Math.sin(seed * (i + 1) * 127.1 + i * 311.7) * 0.5 + 0.5;
+    const pseudo2 = Math.sin(seed * (i + 1) * 269.5 + i * 183.3) * 0.5 + 0.5;
+    const x = pseudo * w + Math.sin(time * 0.5 + i) * drift * 8;
+    const y = pseudo2 * h + Math.cos(time * 0.4 + i * 0.7) * breath * 6;
+    const r = 1 + shimmer * 3 + pseudo * 2;
+    const alpha = isListening ? 0.15 + shimmer * 0.25 : 0.06 + shimmer * 0.1;
+    const hue = 230 + drift * 50 + pseudo * 30;
+    c.beginPath();
+    c.arc(((x % w) + w) % w, ((y % h) + h) % h, r, 0, Math.PI * 2);
+    c.fillStyle = `hsla(${hue}, ${30 + shimmer * 30}%, ${50 + shimmer * 20}%, ${alpha})`;
+    c.fill();
+  }
+
+  // Layer 3: breath waves
+  c.strokeStyle = `hsla(${240 + drift * 30}, ${20 + shimmer * 30}%, 50%, ${isListening ? 0.12 : 0.05})`;
+  c.lineWidth = 0.5 + breath;
+  c.beginPath();
+  for (let x = 0; x < w; x++) {
+    const freq1 = 0.02 + density * 0.03;
+    const freq2 = 0.05 + shimmer * 0.04;
+    const y = h * 0.5
+      + Math.sin(x * freq1 + time * 0.6 + drift * 5) * h * 0.15 * breath
+      + Math.sin(x * freq2 + time * 0.3) * h * 0.08 * shimmer;
+    x === 0 ? c.moveTo(x, y) : c.lineTo(x, y);
+  }
+  c.stroke();
+
+  // Subtle border glow when listening
+  if (isListening) {
+    c.strokeStyle = `hsla(250, 30%, 60%, 0.08)`;
+    c.lineWidth = 2;
+    c.strokeRect(1, 1, w - 2, h - 2);
+  }
+}
+
+function drawAllArt() {
+  const canvases = document.querySelectorAll('canvas.cell-art');
+  const time = performance.now() / 1000;
+  canvases.forEach(canvas => {
+    const idx = parseInt(canvas.dataset.idx);
+    if (variations[idx]) {
+      drawCellArt(canvas, variations[idx], idx === currentListening, time);
+    }
+  });
+}
+
+function startArtLoop() {
+  cancelAnimationFrame(artAnimId);
+  function loop() {
+    if (!running) return;
+    if (viewMode === 'art') drawAllArt();
+    artAnimId = requestAnimationFrame(loop);
+  }
+  loop();
 }
 
 // --- Audio engine ---
@@ -381,7 +491,6 @@ function pickCluster(count) {
   return cluster;
 }
 
-// Create a full slot with its own gain envelope, voices, breath, and evolution
 function createSlot(params) {
   const slotGain = ctx.createGain();
   slotGain.gain.value = 0;
@@ -392,13 +501,8 @@ function createSlot(params) {
 
   const voiceCount = 2 + Math.floor(params.density * 4);
   const freqs = pickCluster(voiceCount);
-  for (const f of freqs) {
-    voices.push(createVoice(ctx, slotGain, f));
-  }
-
-  for (let i = 0; i < 2; i++) {
-    breaths.push(createBreathLayer(ctx, slotGain));
-  }
+  for (const f of freqs) voices.push(createVoice(ctx, slotGain, f));
+  for (let i = 0; i < 2; i++) breaths.push(createBreathLayer(ctx, slotGain));
 
   let evolveId = null;
 
@@ -408,9 +512,8 @@ function createSlot(params) {
 
     voices.forEach(v => {
       if (!v.alive) return;
-      const driftAmount = params.drift * 3;
       v.osc.frequency.setTargetAtTime(
-        v.freq + (Math.random() - 0.5) * driftAmount, now, 8 + Math.random() * 12
+        v.freq + (Math.random() - 0.5) * params.drift * 3, now, 8 + Math.random() * 12
       );
       const newPan = Math.max(-1, Math.min(1, v.pan.pan.value + (Math.random() - 0.5) * 0.3));
       v.pan.pan.setTargetAtTime(newPan, now, 5);
@@ -426,7 +529,6 @@ function createSlot(params) {
       n.pan.pan.setTargetAtTime(newPan, now, 4);
     });
 
-    // Ghost note
     if (Math.random() < 0.04 * params.shimmer) {
       const highFreq = FREQ_POOL[Math.floor(FREQ_POOL.length * 0.4) + Math.floor(Math.random() * 6)];
       const ghost = createVoice(ctx, slotGain, highFreq);
@@ -444,16 +546,9 @@ function createSlot(params) {
   evolve();
 
   return {
-    slotGain,
-    voices,
-    breaths,
-    params,
-    fadeIn() {
-      slotGain.gain.setTargetAtTime(1, ctx.currentTime, 1.5);
-    },
-    fadeOut() {
-      slotGain.gain.setTargetAtTime(0, ctx.currentTime, 1.5);
-    },
+    slotGain, voices, breaths, params,
+    fadeIn() { slotGain.gain.setTargetAtTime(1, ctx.currentTime, 1.5); },
+    fadeOut() { slotGain.gain.setTargetAtTime(0, ctx.currentTime, 1.5); },
     destroy() {
       clearTimeout(evolveId);
       slotGain.gain.setTargetAtTime(0, ctx.currentTime, 0.5);
@@ -465,6 +560,8 @@ function createSlot(params) {
     }
   };
 }
+
+// --- Orchestration ---
 
 function init() {
   ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -510,71 +607,73 @@ function init() {
   comp.connect(masterHP);
   masterHP.connect(ctx.destination);
 
-  if (variations.length !== 4) generateVariations();
-  else renderVariationCards();
+  if (variations.length !== NUM_CELLS) generateChain();
+  buildGrid();
   startAllSlots();
   if (!paused) startCycling();
   startVisualization();
+  startArtLoop();
 }
 
 function startAllSlots() {
-  for (let i = 0; i < 4; i++) {
+  for (let i = 0; i < NUM_CELLS; i++) {
     if (slots[i]) slots[i].destroy();
     slots[i] = createSlot(variations[i]);
   }
-  highlightSlot(0);
+  highlightSlot(currentListening);
 }
 
 function highlightSlot(idx) {
   currentListening = idx;
-  const cards = document.querySelectorAll('.variation');
-  const dots = document.querySelectorAll('.cycle-dot');
-
-  for (let i = 0; i < 4; i++) {
-    cards[i].classList.toggle('listening', i === idx);
-    dots[i].classList.toggle('active', i === idx);
+  const cells = document.querySelectorAll('.cell');
+  cells.forEach((cell, i) => cell.classList.toggle('listening', i === idx));
+  for (let i = 0; i < NUM_CELLS; i++) {
     if (slots[i]) {
       if (i === idx) slots[i].fadeIn();
       else slots[i].fadeOut();
     }
   }
+  // Scroll the active cell into view
+  const activeCell = cells[idx];
+  if (activeCell) activeCell.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   saveState();
 }
 
 function startCycling() {
   clearInterval(cycleTimer);
   cycleTimer = setInterval(() => {
-    highlightSlot((currentListening + 1) % 4);
-  }, 8000);
+    highlightSlot((currentListening + 1) % NUM_CELLS);
+  }, CYCLE_TIME);
 }
 
+// Upvote: keep this cell, reroll all others as a chain from it
 function selectVariation(idx) {
-  basis = { ...variations[idx] };
+  const kept = { ...variations[idx] };
 
-  // Mark selected briefly
-  const cards = document.querySelectorAll('.variation');
-  cards[idx].classList.add('selected');
-  setTimeout(() => cards[idx].classList.remove('selected'), 600);
-
-  // Tear down only the other slots
-  for (let i = 0; i < 4; i++) {
+  // Tear down other slots
+  for (let i = 0; i < NUM_CELLS; i++) {
     if (i === idx) continue;
     if (slots[i]) slots[i].destroy();
     slots[i] = null;
   }
 
-  // Keep the chosen one in place, mutate the rest
-  const kept = variations[idx];
-  for (let i = 0; i < 4; i++) {
-    variations[i] = (i === idx) ? { ...kept } : mutate(basis, 0.4);
+  // Rebuild chain: idx stays, walk outward in both directions
+  variations[idx] = kept;
+  // Forward from idx
+  for (let i = idx + 1; i < NUM_CELLS; i++) {
+    variations[i] = mutate(variations[i - 1], 0.15);
   }
-  renderVariationCards();
+  // Backward from idx
+  for (let i = idx - 1; i >= 0; i--) {
+    variations[i] = mutate(variations[i + 1], 0.15);
+  }
+
+  renderCells();
   saveState();
 
-  // Small delay so old audio fades before new starts
   setTimeout(() => {
     if (!running) return;
-    for (let i = 0; i < 4; i++) {
+    for (let i = 0; i < NUM_CELLS; i++) {
       if (i === idx) continue;
       slots[i] = createSlot(variations[i]);
     }
@@ -583,13 +682,15 @@ function selectVariation(idx) {
   }, 1500);
 }
 
+// Downvote: reroll just this cell from its neighbors
 function rejectVariation(idx) {
-  // Replace this one slot with a new mutation of the current basis
   if (slots[idx]) slots[idx].destroy();
   slots[idx] = null;
 
-  variations[idx] = mutate(basis, 0.4);
-  renderVariationCards();
+  // Mutate from a neighbor
+  const neighbor = idx > 0 ? variations[idx - 1] : variations[idx + 1];
+  variations[idx] = mutate(neighbor, 0.2);
+  renderCells();
   saveState();
 
   setTimeout(() => {
@@ -599,17 +700,18 @@ function rejectVariation(idx) {
   }, 1000);
 }
 
-// Wire up vote clicks via delegation
-$('variations').addEventListener('click', (e) => {
+// --- Event delegation ---
+
+$('grid').addEventListener('click', (e) => {
   const btn = e.target.closest('.vote-btn');
   if (!btn || !running) return;
   const idx = parseInt(btn.dataset.idx);
-  const action = btn.dataset.action;
-  if (action === 'up') selectVariation(idx);
-  else if (action === 'down') rejectVariation(idx);
+  if (btn.dataset.action === 'up') selectVariation(idx);
+  else rejectVariation(idx);
 });
 
-// Visualization
+// --- Background visualization ---
+
 function startVisualization() {
   const canvas = $('viz');
   const c = canvas.getContext('2d');
@@ -636,7 +738,7 @@ function startVisualization() {
     c.fillStyle = 'rgba(10, 10, 15, 0.08)';
     c.fillRect(0, 0, w, h);
 
-    const cur = variations[currentListening] || basis;
+    const cur = variations[currentListening] || { breath: 0.5, shimmer: 0.3 };
 
     particles.forEach(p => {
       p.x += p.vx + (Math.random() - 0.5) * 0.2 * cur.breath;
@@ -660,32 +762,33 @@ function startVisualization() {
   draw();
 }
 
-// Start/stop
+// --- Controls ---
+
 $('startBtn').addEventListener('click', () => {
   if (!running) {
     running = true;
     $('startBtn').textContent = 'end';
     $('startBtn').classList.add('active');
-    $('variations').classList.add('visible');
-    $('cycleIndicator').classList.add('visible');
-    $('hint').classList.add('visible');
-    $('pauseBtn').classList.add('visible');
-    // Restore saved pause state
-    const savedState = loadState();
-    if (savedState) paused = savedState.paused;
+    $('gridWrap').classList.add('visible');
+    $('bottomRow').classList.add('visible');
+    const saved = loadState();
+    if (saved) {
+      paused = saved.paused;
+      viewMode = saved.viewMode || 'art';
+    }
     $('pauseBtn').textContent = paused ? 'cycle' : 'pause';
-    $('pauseBtn').classList.toggle('paused', paused);
+    $('pauseBtn').classList.toggle('active', paused);
+    $('viewBtn').textContent = viewMode === 'art' ? 'params' : 'art';
     init();
   } else {
     running = false;
     $('startBtn').textContent = 'begin';
     $('startBtn').classList.remove('active');
-    $('variations').classList.remove('visible');
-    $('cycleIndicator').classList.remove('visible');
-    $('hint').classList.remove('visible');
-    $('pauseBtn').classList.remove('visible');
+    $('gridWrap').classList.remove('visible');
+    $('bottomRow').classList.remove('visible');
     clearInterval(cycleTimer);
-    for (let i = 0; i < 4; i++) {
+    cancelAnimationFrame(artAnimId);
+    for (let i = 0; i < NUM_CELLS; i++) {
       if (slots[i]) { slots[i].destroy(); slots[i] = null; }
     }
     if (ctx) { ctx.close(); ctx = null; }
@@ -698,12 +801,23 @@ $('pauseBtn').addEventListener('click', () => {
   if (paused) {
     clearInterval(cycleTimer);
     $('pauseBtn').textContent = 'cycle';
-    $('pauseBtn').classList.add('paused');
+    $('pauseBtn').classList.add('active');
   } else {
     startCycling();
     $('pauseBtn').textContent = 'pause';
-    $('pauseBtn').classList.remove('paused');
+    $('pauseBtn').classList.remove('active');
   }
+  saveState();
+});
+
+$('viewBtn').addEventListener('click', () => {
+  if (!running) return;
+  viewMode = viewMode === 'art' ? 'params' : 'art';
+  $('viewBtn').textContent = viewMode === 'art' ? 'params' : 'art';
+  renderCells();
+  // Re-apply listening state
+  const cells = document.querySelectorAll('.cell');
+  cells.forEach((cell, i) => cell.classList.toggle('listening', i === currentListening));
   saveState();
 });
 </script>
