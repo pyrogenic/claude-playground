@@ -858,10 +858,16 @@ function selectVariation(idx) {
 
 // Downvote: reroll this cell from neighbor (unless sticky — unstick first)
 function rejectVariation(idx) {
+  // First tap on sticky: just unstick, keep the sound
+  if (variations[idx].sticky) {
+    variations[idx].sticky = false;
+    updateStickyClasses();
+    saveState();
+    return;
+  }
+
   if (slots[idx]) slots[idx].destroy();
   slots[idx] = null;
-
-  variations[idx].sticky = false;
 
   // Mutate from nearest neighbor
   const neighbor = idx > 0 ? variations[idx - 1] : variations[idx + 1];
