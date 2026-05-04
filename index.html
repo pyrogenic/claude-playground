@@ -248,6 +248,8 @@
   <div class="bottom-row" id="bottomRow">
     <button class="ctrl-btn" id="pauseBtn">pause</button>
     <button class="ctrl-btn" id="viewBtn">params</button>
+    <button class="ctrl-btn" id="saveBtn">save</button>
+    <button class="ctrl-btn" id="loadBtn">load</button>
     <span class="hint">+ keep, &#x2212; reroll</span>
     <div class="slider-control">
       <label>fade</label>
@@ -259,6 +261,7 @@
     </div>
   </div>
 </div>
+<input type="file" id="loadFile" accept=".json" style="display:none">
 
 <script>
 const $ = id => document.getElementById(id);
@@ -1027,6 +1030,57 @@ $('dwellSlider').addEventListener('input', () => {
   dwellTime = parseFloat($('dwellSlider').value);
   if (!paused) startCycling();
   saveState();
+});
+
+$('saveBtn').addEventListener('click', () => {
+  if (!running) return;
+  const data = JSON.stringify({ variations, currentListening, paused, viewMode, fadeTime, dwellTime }, null, 2);
+  const blob = new Blob([data], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `drone-${Date.now()}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+});
+
+$('loadBtn').addEventListener('click', () => {
+  $('loadFile').click();
+});
+
+$('loadFile').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    try {
+      const s = JSON.parse(ev.target.result);
+      if (!s || !s.variations || s.variations.length !== NUM_CELLS) return;
+      variations = s.variations;
+      currentListening = s.currentListening || 0;
+      paused = s.paused || false;
+      viewMode = s.viewMode || 'art';
+      fadeTime = s.fadeTime || 3;
+      dwellTime = s.dwellTime || 12;
+      saveState();
+      if (running) {
+        for (let i = 0; i < NUM_CELLS; i++) {
+          if (slots[i]) { slots[i].destroy(); slots[i] = null; }
+        }
+        buildGrid();
+        startAllSlots();
+        highlightSlot(currentListening);
+        if (!paused) startCycling();
+        $('pauseBtn').textContent = paused ? 'cycle' : 'pause';
+        $('pauseBtn').classList.toggle('active', paused);
+        $('viewBtn').textContent = viewMode === 'art' ? 'params' : 'art';
+        $('fadeSlider').value = fadeTime;
+        $('dwellSlider').value = dwellTime;
+      }
+    } catch(err) {}
+    e.target.value = '';
+  };
+  reader.readAsText(file);
 });
 </script>
 </body>
